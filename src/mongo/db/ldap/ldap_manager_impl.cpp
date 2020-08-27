@@ -267,6 +267,7 @@ Status LDAPManagerImpl::execQuery(std::string& ldapurl, std::vector<std::string>
 
     int retrycnt = 1;
     do {
+        log() << "_ldap ptr: " << (void*)_ldap;
         res = ldap_search_ext_s(_ldap,
                 ludp->lud_dn,
                 ludp->lud_scope,
@@ -276,11 +277,14 @@ Status LDAPManagerImpl::execQuery(std::string& ldapurl, std::vector<std::string>
                 nullptr, nullptr, &tv, 0, &answer);
         if (res == LDAP_SUCCESS)
             break;
+        log() << "retrycnt is: " << retrycnt;
         if (retrycnt > 0) {
             ldap_msgfree(answer);
             error() << "LDAP search failed with error: {}"_format(
                     ldap_err2string(res));
+            log() << "staring reinitialize";
             Status s = reinitialize();
+            log() << "after reinitialize";
             if (!s.isOK()) {
                 error() << "LDAP connection reinitialization failed";
                 return s;
@@ -288,6 +292,7 @@ Status LDAPManagerImpl::execQuery(std::string& ldapurl, std::vector<std::string>
         }
     } while (retrycnt-- > 0);
 
+    log() << "after loop";
     ON_BLOCK_EXIT([&] { ldap_msgfree(answer); });
     if (res != LDAP_SUCCESS) {
         return Status(ErrorCodes::LDAPLibraryError,
