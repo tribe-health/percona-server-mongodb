@@ -36,6 +36,7 @@
 #include "mongo/db/storage/wiredtiger/wiredtiger_session_cache.h"
 
 #include "mongo/base/error_codes.h"
+#include "mongo/db/audit/audit.h"
 #include "mongo/db/server_parameters.h"
 #include "mongo/db/storage/journal_listener.h"
 #include "mongo/db/storage/wiredtiger/wiredtiger_kv_engine.h"
@@ -225,6 +226,10 @@ void WiredTigerSessionCache::waitUntilDurable(bool forceCheckpoint) {
         {
             stdx::unique_lock<stdx::mutex> lk(_journalListenerMutex);
             JournalListener::Token token = _journalListener->getToken();
+#ifdef PERCONA_AUDIT_ENABLED
+            // Make audit log durable
+            audit::fsyncAuditLog();
+#endif
             invariantWTOK(s->checkpoint(s, NULL));
             _journalListener->onDurable(token);
         }
@@ -252,6 +257,11 @@ void WiredTigerSessionCache::waitUntilDurable(bool forceCheckpoint) {
     stdx::unique_lock<stdx::mutex> jlk(_journalListenerMutex);
     JournalListener::Token token = _journalListener->getToken();
 
+
+#ifdef PERCONA_AUDIT_ENABLED
+    // Make audit log durable
+    audit::fsyncAuditLog();
+#endif
     // Use the journal when available, or a checkpoint otherwise.
     if (_engine && _engine->isDurable()) {
         invariantWTOK(s->log_flush(s, "sync=on"));
