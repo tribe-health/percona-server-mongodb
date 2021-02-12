@@ -1491,6 +1491,8 @@ static void copy_file_size(const boost::filesystem::path& srcFile, const boost::
         dst.write(bufptr, cnt);
         fsize -= cnt;
     }
+
+    dst.close();
 }
 
 Status WiredTigerKVEngine::_hotBackupPopulateLists(OperationContext* opCtx, const std::string& path, std::vector<DBTuple>& dbList, std::vector<FileTuple>& filesList) {
