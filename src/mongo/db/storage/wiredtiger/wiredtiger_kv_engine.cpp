@@ -2081,11 +2081,26 @@ Status WiredTigerKVEngine::hotBackup(OperationContext* opCtx, const std::string&
             // more fine-grained copy
             copy_file_size(srcFile, destFile, fsize);
         } catch (const fs::filesystem_error& ex) {
-            return Status(ErrorCodes::InvalidPath, ex.what());
+            return Status(ErrorCodes::InvalidPath,
+                          "filesystem_error while copying '{}' to '{}': ({}/{}): {}"_format(
+                              srcFile.string(),
+                              destFile.string(),
+                              ex.code().value(),
+                              ex.code().message(),
+                              ex.what()));
+        } catch (const std::system_error& ex) {
+            return Status(
+                ErrorCodes::InternalError,
+                "system_error while copying '{}' to '{}': ({}/{}): {}"_format(srcFile.string(),
+                                                                              destFile.string(),
+                                                                              ex.code().value(),
+                                                                              ex.code().message(),
+                                                                              ex.what()));
         } catch (const std::exception& ex) {
-            return Status(ErrorCodes::InternalError, ex.what());
+            return Status(ErrorCodes::InternalError,
+                          "exception while copying '{}' to '{}': {}"_format(
+                              srcFile.string(), destFile.string(), ex.what()));
         }
-
     }
 
     return Status::OK();
