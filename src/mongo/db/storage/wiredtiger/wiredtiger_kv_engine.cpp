@@ -2064,10 +2064,19 @@ Status WiredTigerKVEngine::hotBackup(OperationContext* opCtx, const std::string&
     std::set<fs::path> existDirs{destPath};
 
     // Do copy files
+    int fcCtr = 0;
     for (auto&& file : filesList) {
         fs::path srcFile{std::get<0>(file)};
         fs::path destFile{std::get<1>(file)};
         auto fsize{std::get<2>(file)};
+
+        log() << "Beginning copy of {}/{} files in backup snapshot: {}, {} bytes"_format(
+            ++fcCtr, filesList.size(), srcFile.string(), fsize);
+        if (!fs::exists(srcFile)) {
+            log() << "Source file does not exist: {}"_format(srcFile.string());
+        } else {
+            log() << "Source file size is: {} bytes"_format(fs::file_size(srcFile));
+        }
 
         try {
             // Try creating destination directories if needed.
