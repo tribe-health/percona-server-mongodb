@@ -140,8 +140,7 @@ ExternalKeysCollectionDocument makeExternalClusterTimeKeyDoc(UUID migrationId, B
  * config.external_validation_keys for it with the same keyId and replicaSetName. Otherwise,
  * updates the ttlExpiresAt of the existing document if it is less than the new ttlExpiresAt.
  */
-repl::OpTime storeExternalClusterTimeKeyDocs(std::shared_ptr<executor::ScopedTaskExecutor> executor,
-                                             std::vector<ExternalKeysCollectionDocument> keyDocs);
+repl::OpTime storeExternalClusterTimeKeyDocs(std::vector<ExternalKeysCollectionDocument> keyDocs);
 
 /**
  * Sets the "ttlExpiresAt" field for the external keys so they can be garbage collected by the ttl
@@ -180,6 +179,11 @@ createRetryableWritesOplogFetchingPipelineForTenantMigrations(
     const boost::intrusive_ptr<ExpressionContext>& expCtx,
     const Timestamp& startFetchingTimestamp,
     const std::string& tenantId);
+
+/**
+ * Returns a new BSONObj created from 'stateDoc' with sensitive fields redacted.
+ */
+BSONObj redactStateDoc(BSONObj stateDoc);
 
 }  // namespace tenant_migration_util
 

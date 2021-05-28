@@ -4,7 +4,7 @@
  * concurrently with TTL deletions.
  *
  * @tags: [requires_fcv_47, requires_majority_read_concern, incompatible_with_eft,
- * incompatible_with_windows_tls]
+ * incompatible_with_windows_tls, incompatible_with_macos, requires_persistence]
  */
 
 (function() {
@@ -23,6 +23,8 @@ const garbageCollectionOpts = {
     ttlMonitorSleepSecs: 5,
     // Allow reads on recipient before migration completes for testing.
     'failpoint.tenantMigrationRecipientNotRejectReads': tojson({mode: 'alwaysOn'}),
+    // Allow non-timestamped reads on donor after migration completes for testing.
+    'failpoint.tenantMigrationDonorAllowsNonTimestampedReads': tojson({mode: 'alwaysOn'}),
 };
 
 const tenantMigrationTest = new TenantMigrationTest(
@@ -131,9 +133,8 @@ function assertTTLDeleteExpiredDocs(dbName, node) {
 
     hangDuringCollectionClone.off();
 
-    const stateRes =
-        assert.commandWorked(tenantMigrationTest.waitForMigrationToComplete(migrationOpts));
-    assert.eq(stateRes.state, TenantMigrationTest.State.kCommitted);
+    TenantMigrationTest.assertCommitted(
+        tenantMigrationTest.waitForMigrationToComplete(migrationOpts));
 
     // Data should be consistent after the migration commits.
     assertTTLDeleteExpiredDocs(dbName, recipientPrimary);
@@ -190,9 +191,8 @@ function assertTTLDeleteExpiredDocs(dbName, node) {
 
     blockFp.off();
 
-    const stateRes =
-        assert.commandWorked(tenantMigrationTest.waitForMigrationToComplete(migrationOpts));
-    assert.eq(stateRes.state, TenantMigrationTest.State.kCommitted);
+    TenantMigrationTest.assertCommitted(
+        tenantMigrationTest.waitForMigrationToComplete(migrationOpts));
 
     // Tests that the TTL cleanup was suspended during the tenant migration.
     waitForOneTTLPassAtNode(donorPrimary);

@@ -5,7 +5,7 @@
  * Tenant migrations are not expected to be run on servers with ephemeralForTest.
  *
  * @tags: [requires_fcv_47, requires_majority_read_concern, incompatible_with_eft,
- * incompatible_with_windows_tls]
+ * incompatible_with_windows_tls, incompatible_with_macos, requires_persistence]
  */
 (function() {
 'use strict';
@@ -91,8 +91,7 @@ function insertDocument(primaryHost, dbName, collName) {
 
     migrationThread.join();
 
-    const migrationRes = assert.commandWorked(migrationThread.returnData());
-    assert.eq(migrationRes.state, TenantMigrationTest.DonorState.kCommitted);
+    TenantMigrationTest.assertCommitted(migrationThread.returnData());
 
     assert.commandWorked(tenantMigrationTest.forgetMigration(migrationOpts.migrationIdString));
     tenantMigrationTest.waitForMigrationGarbageCollection(migrationId, tenantId);
@@ -155,8 +154,7 @@ function insertDocument(primaryHost, dbName, collName) {
 
     migrationThread.join();
 
-    const migrationRes = assert.commandWorked(migrationThread.returnData());
-    assert.eq(migrationRes.state, TenantMigrationTest.DonorState.kAborted);
+    TenantMigrationTest.assertAborted(migrationThread.returnData());
     abortFp.off();
 
     assert.commandWorked(tenantMigrationTest.forgetMigration(migrationOpts.migrationIdString));

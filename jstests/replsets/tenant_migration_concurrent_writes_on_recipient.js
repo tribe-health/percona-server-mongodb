@@ -4,7 +4,7 @@
  * in that time window.
  *
  * @tags: [requires_fcv_47, requires_majority_read_concern, incompatible_with_eft,
- * incompatible_with_windows_tls]
+ * incompatible_with_windows_tls, incompatible_with_macos, requires_persistence]
  */
 
 (function() {
@@ -73,8 +73,7 @@ const kTenantId = "testTenantId";
     assert.commandWorked(tenantCollOnRecipient.remove({_id: 1}));
 
     waitForRejectReadsBeforeTsFp.off();
-    const stateRes = assert.commandWorked(runMigrationThread.returnData());
-    assert.eq(stateRes.state, TenantMigrationTest.DonorState.kCommitted);
+    TenantMigrationTest.assertCommitted(runMigrationThread.returnData());
 
     // Write after the migration committed.
     assert.commandWorked(tenantCollOnRecipient.remove({_id: 1}));
@@ -105,9 +104,8 @@ const kTenantId = "testTenantId";
     let abortFp = configureFailPoint(recipientPrimary,
                                      "fpBeforeFulfillingDataConsistentPromise",
                                      {action: "stop", stopErrorCode: ErrorCodes.InternalError});
-    const stateRes = assert.commandWorked(tenantMigrationTest.runMigration(
+    TenantMigrationTest.assertAborted(tenantMigrationTest.runMigration(
         migrationOpts, false /* retryOnRetryableErrors */, false /* automaticForgetMigration */));
-    assert.eq(stateRes.state, TenantMigrationTest.DonorState.kAborted);
     abortFp.off();
 
     // Write after the migration aborted.
@@ -137,9 +135,8 @@ const kTenantId = "testTenantId";
     // recipientSyncData (i.e. after it has reached the returnAfterReachingTimestamp).
     let abortFp =
         configureFailPoint(donorPrimary, "abortTenantMigrationBeforeLeavingBlockingState");
-    const stateRes = assert.commandWorked(tenantMigrationTest.runMigration(
+    TenantMigrationTest.assertAborted(tenantMigrationTest.runMigration(
         migrationOpts, false /* retryOnRetryableErrors */, false /* automaticForgetMigration */));
-    assert.eq(stateRes.state, TenantMigrationTest.DonorState.kAborted);
     abortFp.off();
 
     // Write after the migration aborted.

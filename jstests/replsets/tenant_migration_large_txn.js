@@ -6,7 +6,7 @@
  * entries are being written.
  *
  * @tags: [requires_fcv_47, requires_majority_read_concern, incompatible_with_eft,
- * incompatible_with_windows_tls]
+ * incompatible_with_windows_tls, incompatible_with_macos, requires_persistence]
  */
 
 (function() {
@@ -85,7 +85,7 @@ assert.soon(
     () => tenantMigrationTest.getTenantMigrationAccessBlocker(donorPrimary, kTenantId).state ===
         TenantMigrationTest.DonorAccessState.kBlockWritesAndReads);
 logApplyOpsForTxnFp.off();
-assert.commandWorked(migrationThread.returnData());
+TenantMigrationTest.assertCommitted(migrationThread.returnData());
 
 // Verify that the transaction commits successfully since both applyOps have oplog timestamp <
 // blockingTimestamp .

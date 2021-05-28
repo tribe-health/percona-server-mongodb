@@ -4,7 +4,8 @@
  * and then issues a donorForgetMigration command. Finally, starts a second tenant migration with
  * the same tenantId as the aborted migration, and expects this second migration to go through.
  *
- * @tags: [requires_fcv_49, requires_majority_read_concern, incompatible_with_windows_tls]
+ * @tags: [requires_fcv_49, requires_majority_read_concern, incompatible_with_windows_tls,
+ * incompatible_with_eft, incompatible_with_macos, requires_persistence]
  */
 
 (function() {
@@ -42,11 +43,10 @@ if (!tenantMigrationTest.isFeatureFlagEnabled()) {
     const donorPrimary = tenantMigrationTest.getDonorPrimary();
     const abortFp =
         configureFailPoint(donorPrimary, "abortTenantMigrationBeforeLeavingBlockingState");
-    const abortRes = assert.commandWorked(
+    TenantMigrationTest.assertAborted(
         tenantMigrationTest.runMigration({migrationIdString: migrationId1, tenantId: tenantId},
                                          false /* retryOnRetryableErrors */,
                                          false /* automaticForgetMigration */));
-    assert.eq(abortRes.state, TenantMigrationTest.DonorState.kAborted);
     abortFp.off();
 
     // Forget the aborted migration.
@@ -57,9 +57,8 @@ if (!tenantMigrationTest.isFeatureFlagEnabled()) {
     // migration with the same tenantId was aborted.
     jsTestLog("Attempting to run a new migration with the same tenantId. New migrationId: " +
               migrationId2 + ", tenantId: " + tenantId);
-    const commitRes = assert.commandWorked(
+    TenantMigrationTest.assertCommitted(
         tenantMigrationTest.runMigration({migrationIdString: migrationId2, tenantId: tenantId}));
-    assert.eq(commitRes.state, TenantMigrationTest.DonorState.kCommitted);
 })();
 
 (() => {
@@ -97,9 +96,8 @@ if (!tenantMigrationTest.isFeatureFlagEnabled()) {
     tryAbortThread.join();
     assert.commandWorked(tryAbortThread.returnData());
 
-    const stateRes = assert.commandWorked(tenantMigrationTest.waitForMigrationToComplete(
+    TenantMigrationTest.assertAborted(tenantMigrationTest.waitForMigrationToComplete(
         {migrationIdString: migrationId1, tenantId: tenantId}));
-    assert.eq(stateRes.state, TenantMigrationTest.DonorState.kAborted);
 
     // Forget the aborted migration.
     jsTestLog("Forgetting aborted migration with migrationId: " + migrationId1);
@@ -109,9 +107,8 @@ if (!tenantMigrationTest.isFeatureFlagEnabled()) {
     // migration with the same tenantId was aborted.
     jsTestLog("Attempting to run a new migration with the same tenantId. New migrationId: " +
               migrationId2 + ", tenantId: " + tenantId);
-    const commitRes = assert.commandWorked(
+    TenantMigrationTest.assertCommitted(
         tenantMigrationTest.runMigration({migrationIdString: migrationId2, tenantId: tenantId}));
-    assert.eq(commitRes.state, TenantMigrationTest.DonorState.kCommitted);
 })();
 
 tenantMigrationTest.stop();

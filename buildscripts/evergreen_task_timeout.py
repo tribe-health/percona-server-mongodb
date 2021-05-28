@@ -30,9 +30,11 @@ SPECIFIC_TASK_OVERRIDES = {
         "replica_sets_update_v1_oplog_jscore_passthrough": timedelta(hours=2, minutes=30),
     },
     "windows-debug-suggested": {
+        "replica_sets_initsync_jscore_passthrough": timedelta(hours=2, minutes=30),
         "replica_sets_jscore_passthrough": timedelta(hours=2, minutes=30),
         "replica_sets_update_v1_oplog_jscore_passthrough": timedelta(hours=2, minutes=30),
     },
+    "windows": {"replica_sets": timedelta(hours=3)},
 
     # unittests outliers
     # repeated execution runs a suite 10 times

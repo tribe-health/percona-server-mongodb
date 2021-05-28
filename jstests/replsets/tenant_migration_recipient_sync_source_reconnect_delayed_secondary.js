@@ -7,7 +7,8 @@
  * or later, the recipient will successfully choose that donor as sync source and resume the
  * migration.
  *
- * @tags: [requires_majority_read_concern, requires_fcv_49, incompatible_with_windows_tls]
+ * @tags: [requires_majority_read_concern, requires_fcv_49, incompatible_with_windows_tls,
+ * incompatible_with_eft, incompatible_with_macos, requires_persistence]
  */
 
 (function() {
@@ -47,7 +48,7 @@ assert.eq(delayedSecondary.host,
 
 hangAfterCreatingConnections.off();
 
-assert.commandWorked(tenantMigrationTest.waitForMigrationToComplete(migrationOpts));
+TenantMigrationTest.assertCommitted(tenantMigrationTest.waitForMigrationToComplete(migrationOpts));
 assert.commandWorked(tenantMigrationTest.forgetMigration(migrationOpts.migrationIdString));
 
 // Remove 'donorSecondary' so that the test can complete properly.

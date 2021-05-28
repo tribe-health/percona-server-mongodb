@@ -812,9 +812,9 @@ Future<void> InvokeCommand::run() {
                auto execContext = _ecd->getExecutionContext();
                // TODO SERVER-53761: find out if we can do this more asynchronously. The client
                // Strand is locked to current thread in ServiceStateMachine::Impl::startNewLoop().
-               tenant_migration_access_blocker::checkIfCanReadOrBlock(
-                   execContext->getOpCtx(), execContext->getRequest().getDatabase())
-                   .get();
+               tenant_migration_access_blocker::checkIfCanReadOrBlock(execContext->getOpCtx(),
+                                                                      execContext->getRequest())
+                   .get(execContext->getOpCtx());
                return runCommandInvocation(_ecd->getExecutionContext(), _ecd->getInvocation());
            })
         .onError<ErrorCodes::TenantMigrationConflict>([this](Status status) {
@@ -830,9 +830,9 @@ Future<void> CheckoutSessionAndInvokeCommand::run() {
 
                auto execContext = _ecd->getExecutionContext();
                // TODO SERVER-53761: find out if we can do this more asynchronously.
-               tenant_migration_access_blocker::checkIfCanReadOrBlock(
-                   execContext->getOpCtx(), execContext->getRequest().getDatabase())
-                   .get();
+               tenant_migration_access_blocker::checkIfCanReadOrBlock(execContext->getOpCtx(),
+                                                                      execContext->getRequest())
+                   .get(execContext->getOpCtx());
                return runCommandInvocation(_ecd->getExecutionContext(), _ecd->getInvocation());
            })
         .onError<ErrorCodes::TenantMigrationConflict>([this](Status status) {

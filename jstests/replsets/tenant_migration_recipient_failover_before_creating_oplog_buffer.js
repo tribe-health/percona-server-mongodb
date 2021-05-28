@@ -2,7 +2,8 @@
  * Tests whether the recipient returns an appropriate error code to the donor when the recipient
  * primary is made to step down before creating the oplog buffer collection.
  *
- * @tags: [requires_fcv_49, requires_replication, incompatible_with_windows_tls]
+ * @tags: [requires_fcv_49, requires_replication, incompatible_with_windows_tls,
+ * incompatible_with_eft, incompatible_with_macos, requires_persistence]
  */
 
 (function() {
@@ -51,7 +52,7 @@ assert.commandWorked(tenantMigrationTest.getRecipientRst().getSecondaries()[0].a
 fpBeforeCreatingOplogBuffer.off();
 
 jsTestLog("Waiting for migration to complete.");
-assert.commandWorked(tenantMigrationTest.waitForMigrationToComplete(migrationOpts));
+TenantMigrationTest.assertCommitted(tenantMigrationTest.waitForMigrationToComplete(migrationOpts));
 
 tenantMigrationTest.stop();
 })();

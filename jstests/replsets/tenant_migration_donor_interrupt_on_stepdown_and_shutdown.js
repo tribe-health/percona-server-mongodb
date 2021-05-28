@@ -2,7 +2,7 @@
  * Tests that tenant migrations are interrupted successfully on stepdown and shutdown.
  *
  * @tags: [requires_fcv_47, requires_majority_read_concern, requires_persistence,
- * incompatible_with_eft, incompatible_with_windows_tls]
+ * incompatible_with_eft, incompatible_with_windows_tls, incompatible_with_macos]
  */
 
 (function() {
@@ -86,7 +86,7 @@ function testDonorForgetMigrationInterrupt(interruptFunc, verifyCmdResponseFunc)
 
     const donorRstArgs = TenantMigrationUtil.createRstArgs(donorRst);
 
-    assert.commandWorked(tenantMigrationTest.runMigration(
+    TenantMigrationTest.assertCommitted(tenantMigrationTest.runMigration(
         migrationOpts, false /* retryOnRetryableErrors */, false /* automaticForgetMigration */));
     const forgetMigrationThread = new Thread(
         TenantMigrationUtil.forgetMigrationAsync, migrationOpts.migrationIdString, donorRstArgs);

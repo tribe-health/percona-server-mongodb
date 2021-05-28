@@ -6,7 +6,8 @@
  *   requires_fcv_49,
  *   requires_majority_read_concern,
  *   incompatible_with_eft,
- *   incompatible_with_windows_tls
+ *   incompatible_with_windows_tls,
+ *   incompatible_with_macos, requires_persistence
  * ]
  */
 
@@ -119,7 +120,7 @@ fpAfterFetchingRetryableWritesEntries.off();
 fpSetSmallAggregationBatchSize.off();
 
 jsTestLog("Waiting for migration to complete.");
-assert.commandWorked(tenantMigrationTest.waitForMigrationToComplete(migrationOpts));
+TenantMigrationTest.assertCommitted(tenantMigrationTest.waitForMigrationToComplete(migrationOpts));
 
 tenantMigrationTest.stop();
 })();

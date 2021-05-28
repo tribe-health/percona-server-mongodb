@@ -2,7 +2,7 @@
  * Tests that the migration still proceeds successfully after a state transition write aborts.
  *
  * @tags: [requires_fcv_47, incompatible_with_eft, requires_majority_read_concern,
- * incompatible_with_windows_tls]
+ * incompatible_with_windows_tls, incompatible_with_macos, requires_persistence]
  */
 (function() {
 "use strict";
@@ -57,7 +57,7 @@ function testAbortInitialState(donorRst) {
     opObserverFp.off();
 
     // Verify that the migration completes successfully.
-    assert.commandWorked(migrationThread.returnData());
+    TenantMigrationTest.assertCommitted(migrationThread.returnData());
     tenantMigrationTest.waitForDonorNodesToReachState(
         donorRst.nodes, migrationId, tenantId, TenantMigrationTest.DonorState.kCommitted);
 

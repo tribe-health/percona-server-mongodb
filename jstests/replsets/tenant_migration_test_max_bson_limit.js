@@ -4,7 +4,7 @@
  * Tenant migrations are not expected to be run on servers with ephemeralForTest.
  *
  * @tags: [requires_fcv_47, requires_majority_read_concern, incompatible_with_eft,
- * incompatible_with_windows_tls]
+ * incompatible_with_windows_tls, incompatible_with_macos, requires_persistence]
  */
 (function() {
 'use strict';
@@ -65,8 +65,7 @@ const bulkWriteThread =
 bulkWriteThread.start();
 writeFp.wait();
 
-const migrationRes = assert.commandWorked(tenantMigrationTest.runMigration(migrationOpts));
-assert.eq(migrationRes.state, TenantMigrationTest.DonorState.kCommitted);
+TenantMigrationTest.assertCommitted(tenantMigrationTest.runMigration(migrationOpts));
 
 writeFp.off();
 bulkWriteThread.join();

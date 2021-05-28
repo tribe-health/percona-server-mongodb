@@ -1,7 +1,8 @@
 /**
  * Tests that in a tenant migration, the recipient primary will use majority read concern when
  * cloning documents from the donor.
- * @tags: [requires_majority_read_concern, requires_fcv_49, incompatible_with_windows_tls]
+ * @tags: [requires_majority_read_concern, requires_fcv_49, incompatible_with_windows_tls,
+ * incompatible_with_eft, incompatible_with_macos, requires_persistence]
  */
 
 (function() {
@@ -86,6 +87,6 @@ notRejectReadsFp.off();
 // Restart secondary replication in the donor replica set and complete the migration.
 restartReplicationOnSecondaries(donorRst);
 waitAfterCloning.off();
-assert.commandWorked(migrationThread.returnData());
+TenantMigrationTest.assertCommitted(migrationThread.returnData());
 tenantMigrationTest.stop();
 })();

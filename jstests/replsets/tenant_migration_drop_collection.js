@@ -3,7 +3,7 @@
  * cloning as part of a tenant migration.
  *
  * @tags: [requires_fcv_47, requires_majority_read_concern, incompatible_with_eft,
- * incompatible_with_windows_tls]
+ * incompatible_with_windows_tls, incompatible_with_macos, requires_persistence]
  */
 
 (function() {
@@ -95,7 +95,7 @@ function runDropTest({failPointName, failPointData, expectedLog, createNew}) {
     }
 
     jsTestLog("Waiting for migration to complete");
-    assert.commandWorked(migrationThread.returnData());
+    TenantMigrationTest.assertCommitted(migrationThread.returnData());
     assert.commandWorked(tenantMigrationTest.forgetMigration(migrationOpts.migrationIdString));
 
     const recipientColl = recipientPrimary.getDB(dbName).getCollection(collName);

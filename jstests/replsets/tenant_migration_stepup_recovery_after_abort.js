@@ -2,7 +2,7 @@
  * Tests the the donor correctly recovers the abort reason and the migration after stepup.
  *
  * @tags: [requires_fcv_47, requires_majority_read_concern, incompatible_with_eft,
- * incompatible_with_windows_tls]
+ * incompatible_with_windows_tls, incompatible_with_macos, requires_persistence]
  */
 
 (function() {
@@ -49,20 +49,20 @@ assert.commandWorked(donorPrimary.getCollection(tenantId + "_testDb.testColl").i
 
 const donorFp = configureFailPoint(donorPrimary, "abortTenantMigrationBeforeLeavingBlockingState");
 
-let stateRes = assert.commandWorked(tenantMigrationTest.runMigration(
-    migrationOpts, false /* retryOnRetryableErrors */, false /* automaticForgetMigration */));
-assert.eq(stateRes.state, TenantMigrationTest.DonorState.kAborted);
-assert.eq(stateRes.abortReason.code, ErrorCodes.InternalError);
+TenantMigrationTest.assertAborted(
+    tenantMigrationTest.runMigration(
+        migrationOpts, false /* retryOnRetryableErrors */, false /* automaticForgetMigration */),
+    ErrorCodes.InternalError);
 donorFp.off();
 
 assert.commandWorked(
     donorPrimary.adminCommand({replSetStepDown: ReplSetTest.kForeverSecs, force: true}));
 assert.commandWorked(donorPrimary.adminCommand({replSetFreeze: 0}));
 
-stateRes = assert.commandWorked(tenantMigrationTest.runMigration(
-    migrationOpts, false /* retryOnRetryableErrors */, false /* automaticForgetMigration */));
-assert.eq(stateRes.state, TenantMigrationTest.DonorState.kAborted);
-assert.eq(stateRes.abortReason.code, ErrorCodes.InternalError);
+TenantMigrationTest.assertAborted(
+    tenantMigrationTest.runMigration(
+        migrationOpts, false /* retryOnRetryableErrors */, false /* automaticForgetMigration */),
+    ErrorCodes.InternalError);
 
 assert.commandWorked(tenantMigrationTest.forgetMigration(migrationOpts.migrationIdString));
 tenantMigrationTest.waitForMigrationGarbageCollection(migrationId, tenantId);

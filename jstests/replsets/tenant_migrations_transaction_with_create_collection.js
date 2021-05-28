@@ -3,7 +3,7 @@
  * command followed by multiple inserts onto that collection.
  *
  * @tags: [requires_fcv_49, requires_majority_read_concern, incompatible_with_eft,
- * incompatible_with_windows_tls]
+ * incompatible_with_windows_tls, incompatible_with_macos, requires_persistence]
  */
 
 (function() {
@@ -61,9 +61,7 @@ session.endSession();
 hangAfterStartingOplogApplier.off();
 
 jsTestLog("Waiting for migration to complete");
-const stateRes =
-    assert.commandWorked(tenantMigrationTest.waitForMigrationToComplete(migrationOpts));
-assert.eq(TenantMigrationTest.State.kCommitted, stateRes.state);
+TenantMigrationTest.assertCommitted(tenantMigrationTest.waitForMigrationToComplete(migrationOpts));
 
 // Verify that all docs were successfully migrated onto the recipient.
 assert.eq(1, recipientPrimary.getCollection(transactionsNS).find().itcount());

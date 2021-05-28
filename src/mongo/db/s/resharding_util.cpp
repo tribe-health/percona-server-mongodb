@@ -233,7 +233,7 @@ void validateZones(const std::vector<mongo::BSONObj>& zones,
 
 void createSlimOplogView(OperationContext* opCtx, Database* db) {
     writeConflictRetry(
-        opCtx, "createReshardingSlimOplog", "local.system.resharding.slimOplogForGraphLookup", [&] {
+        opCtx, "createReshardingSlimOplog", NamespaceString::kReshardingOplogView.ns(), [&] {
             {
                 // Create 'system.views' in a separate WUOW if it does not exist.
                 WriteUnitOfWork wuow(opCtx);
@@ -256,10 +256,11 @@ void createSlimOplogView(OperationContext* opCtx, Database* db) {
             options.viewOn = NamespaceString::kRsOplogNamespace.coll().toString();
             options.pipeline = BSON_ARRAY(getSlimOplogPipeline());
             WriteUnitOfWork wuow(opCtx);
-            uassertStatusOK(
-                db->createView(opCtx,
-                               NamespaceString("local.system.resharding.slimOplogForGraphLookup"),
-                               options));
+            auto status = db->createView(opCtx, NamespaceString::kReshardingOplogView, options);
+            if (status == ErrorCodes::NamespaceExists) {
+                return;
+            }
+            uassertStatusOK(status);
             wuow.commit();
         });
 }

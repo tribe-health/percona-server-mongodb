@@ -3,7 +3,7 @@
  * on the recipient.
  *
  * @tags: [requires_fcv_49, requires_majority_read_concern, incompatible_with_eft,
- * incompatible_with_windows_tls]
+ * incompatible_with_windows_tls, incompatible_with_macos, requires_persistence]
  */
 
 (function() {
@@ -173,7 +173,7 @@ assert.commandWorked(
 // Wait for the migration to complete.
 jsTest.log("Waiting for migration to complete");
 waitAfterCloning.off();
-migrationThread.join();
+TenantMigrationTest.assertCommitted(migrationThread.returnData());
 
 // Print the no-op oplog entries for debugging purposes.
 jsTestLog("Recipient oplog migration entries.");
@@ -270,11 +270,7 @@ const migrationOpts2 = {
     tenantId: kTenantId,
 };
 
-// TODO(SERVER-55193): Make back-to-back migration work and remove this 'remove'
-assert.commandWorked(
-    recipientRst.getPrimary().getDB("config").tenantMigrationRecipients.remove({}));
-
-assert.commandWorked(tenantMigrationTest2.runMigration(migrationOpts2));
+TenantMigrationTest.assertCommitted(tenantMigrationTest2.runMigration(migrationOpts2));
 
 // Print the no-op oplog entries for debugging purposes.
 jsTestLog("Second recipient oplog migration entries.");

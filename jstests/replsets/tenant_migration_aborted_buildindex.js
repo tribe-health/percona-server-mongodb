@@ -2,7 +2,7 @@
  * Tests that index building is properly completed when a migration aborts.
  *
  * @tags: [requires_fcv_47, requires_majority_read_concern, incompatible_with_eft,
- * incompatible_with_windows_tls]
+ * incompatible_with_windows_tls, incompatible_with_macos, requires_persistence]
  */
 
 (function() {
@@ -117,7 +117,7 @@ assert.soon(() => checkLog.checkContainsWithCountJson(donorPrimary, 4886202, und
 const abortFp = configureFailPoint(donorPrimary, "abortTenantMigrationBeforeLeavingBlockingState");
 blockingFp.off();
 
-assert.commandWorked(migrationThread.returnData());
+TenantMigrationTest.assertAborted(migrationThread.returnData());
 abortFp.off();
 
 // The index creation threads should be done.

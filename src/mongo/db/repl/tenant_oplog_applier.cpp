@@ -40,6 +40,7 @@
 #include "mongo/db/catalog_raii.h"
 #include "mongo/db/concurrency/write_conflict_exception.h"
 #include "mongo/db/db_raii.h"
+#include "mongo/db/dbhelpers.h"
 #include "mongo/db/op_observer.h"
 #include "mongo/db/repl/apply_ops.h"
 #include "mongo/db/repl/cloner_utils.h"
@@ -108,6 +109,14 @@ OpTime TenantOplogApplier::getBeginApplyingOpTime_forTest() const {
 
 Timestamp TenantOplogApplier::getResumeBatchingTs_forTest() const {
     return _resumeBatchingTs;
+}
+
+void TenantOplogApplier::setCloneFinishedRecipientOpTime(OpTime cloneFinishedRecipientOpTime) {
+    stdx::lock_guard lk(_mutex);
+    invariant(!_isActive_inlock());
+    invariant(!cloneFinishedRecipientOpTime.isNull());
+    invariant(_cloneFinishedRecipientOpTime.isNull());
+    _cloneFinishedRecipientOpTime = cloneFinishedRecipientOpTime;
 }
 
 Status TenantOplogApplier::_doStartup_inlock() noexcept {
@@ -605,19 +614,20 @@ void TenantOplogApplier::_writeSessionNoOpsForRange(
             auto sessionId = *entry.getSessionId();
             auto txnNumber = *entry.getTxnNumber();
             auto entryStmtIds = entry.getStatementIds();
+            LOGV2_DEBUG(5351000,
+                        2,
+                        "Tenant Oplog Applier processing retryable write",
+                        "entry"_attr = redact(entry.toBSONForLogging()),
+                        "sessionId"_attr = sessionId,
+                        "txnNumber"_attr = txnNumber,
+                        "statementIds"_attr = entryStmtIds,
+                        "tenant"_attr = _tenantId,
+                        "migrationUuid"_attr = _migrationUuid);
             if (entry.getOpType() == repl::OpTypeEnum::kNoop) {
                 // There are two types of no-ops we expect here.  One is pre/post image, which
                 // will have an empty o2 field.  The other is previously transformed oplog
                 // entries from earlier migrations.
-                LOGV2_DEBUG(5351000,
-                            2,
-                            "Tenant Oplog Applier processing retryable write no-op",
-                            "entry"_attr = redact(entry.toBSONForLogging()),
-                            "sessionId"_attr = sessionId,
-                            "txnNumber"_attr = txnNumber,
-                            "statementIds"_attr = entryStmtIds,
-                            "tenant"_attr = _tenantId,
-                            "migrationUuid"_attr = _migrationUuid);
+
                 // We don't wrap the no-ops in another no-op.
                 // If object2 is missing, this is a preImage/postImage.
                 if (!entry.getObject2()) {
@@ -651,25 +661,13 @@ void TenantOplogApplier::_writeSessionNoOpsForRange(
             }
             stmtIds.insert(stmtIds.end(), entryStmtIds.begin(), entryStmtIds.end());
 
-            LOGV2_DEBUG(5350901,
-                        2,
-                        "Tenant Oplog Applier processing retryable write",
-                        "sessionId"_attr = sessionId,
-                        "txnNumber"_attr = txnNumber,
-                        "statementIds"_attr = entryStmtIds,
-                        "tenant"_attr = _tenantId,
-                        "noop_entry"_attr = redact(noopEntry.toBSON()),
-                        "migrationUuid"_attr = _migrationUuid);
-
-            if (entry.getPreImageOpTime()) {
-                uassert(
-                    5351005,
-                    str::stream()
-                        << "Tenant oplog application cannot apply retryable write with txnNumber  "
-                        << txnNumber << " statementNumber " << stmtIds.front() << " on session "
-                        << sessionId << " because the preImage is missing",
-                    prePostImageEntry);
-
+            if (!prePostImageEntry && (entry.getPreImageOpTime() || entry.getPostImageOpTime())) {
+                LOGV2(5535302,
+                      "Tenant Oplog Applier omitting pre- or post- image for findAndModify",
+                      "entry"_attr = redact(entry.toBSONForLogging()),
+                      "tenant"_attr = _tenantId,
+                      "migrationUuid"_attr = _migrationUuid);
+            } else if (entry.getPreImageOpTime()) {
                 uassert(
                     5351002,
                     str::stream()
@@ -682,14 +680,6 @@ void TenantOplogApplier::_writeSessionNoOpsForRange(
                     originalPrePostImageOpTime == entry.getPreImageOpTime());
                 noopEntry.setPreImageOpTime(prePostImageEntry->getOpTime());
             } else if (entry.getPostImageOpTime()) {
-                uassert(
-                    5351006,
-                    str::stream()
-                        << "Tenant oplog application cannot apply retryable write with txnNumber  "
-                        << txnNumber << " statementNumber " << stmtIds.front() << " on session "
-                        << sessionId << " because the postImage is missing",
-                    prePostImageEntry);
-
                 uassert(
                     5351007,
                     str::stream()
@@ -732,7 +722,18 @@ void TenantOplogApplier::_writeSessionNoOpsForRange(
                                   << txnNumber << " statement " << entryStmtIds.front()
                                   << " on session " << sessionId,
                     !txnParticipant.checkStatementExecutedNoOplogEntryFetch(entryStmtIds.front()));
-            prevWriteOpTime = txnParticipant.getLastWriteOpTime();
+
+            // We could have an existing lastWriteOpTime for the same retryable write chain from a
+            // previously aborted migration. This could also happen if the tenant being migrated has
+            // previously resided in this replica set. So we want to start a new history chain
+            // instead of linking the newly generated no-op to the existing chain before the current
+            // migration starts. Otherwise, we could have duplicate entries for the same stmtId.
+            invariant(!_cloneFinishedRecipientOpTime.isNull());
+            if (txnParticipant.getLastWriteOpTime() > _cloneFinishedRecipientOpTime) {
+                prevWriteOpTime = txnParticipant.getLastWriteOpTime();
+            } else {
+                prevWriteOpTime = OpTime();
+            }
 
             // Set sessionId, txnNumber, and statementId for all ops in a retryable write.
             noopEntry.setSessionId(sessionId);
@@ -754,6 +755,13 @@ void TenantOplogApplier::_writeSessionNoOpsForRange(
         }
 
         noopEntry.setPrevWriteOpTimeInTransaction(prevWriteOpTime);
+
+        LOGV2_DEBUG(5535700,
+                    2,
+                    "Tenant Oplog Applier writing session no-op",
+                    "tenant"_attr = _tenantId,
+                    "migrationUuid"_attr = _migrationUuid,
+                    "op"_attr = redact(noopEntry.toBSON()));
 
         AutoGetOplog oplogWrite(opCtx.get(), OplogAccessMode::kWrite);
         writeConflictRetry(
@@ -909,6 +917,31 @@ Status TenantOplogApplier::_applyOplogEntryOrGroupedInserts(
         uasserted(5434700,
                   "Index creation, except createIndex on empty collections, is not supported in "
                   "tenant migration");
+    }
+    if (op.getCommandType() == OplogEntry::CommandType::kCreateIndexes) {
+        auto uuid = op.getUuid();
+        uassert(5652700, "Missing UUID from createIndex oplog entry", uuid);
+        try {
+            AutoGetCollectionForRead autoColl(opCtx, {op.getNss().db().toString(), *uuid});
+            uassert(ErrorCodes::NamespaceNotFound, "Collection does not exist", autoColl);
+            // During tenant migration oplog application, we only need to apply createIndex on empty
+            // collections. Otherwise, the index is guaranteed to be dropped after. This is because
+            // we block index builds on the donor for the duration of the tenant migration.
+            if (!Helpers::findOne(
+                     opCtx, autoColl.getCollection(), BSONObj(), false /* requireIndex */)
+                     .isNull()) {
+                LOGV2_DEBUG(5652701,
+                            2,
+                            "Tenant migration ignoring createIndex for non-empty collection",
+                            "op"_attr = redact(op.toBSONForLogging()),
+                            "tenant"_attr = _tenantId,
+                            "migrationUuid"_attr = _migrationUuid);
+                return Status::OK();
+            }
+        } catch (const ExceptionFor<ErrorCodes::NamespaceNotFound>&) {
+            // If the collection doesn't exist, it is safe to ignore.
+            return Status::OK();
+        }
     }
     // We don't count tenant application in the ops applied stats.
     auto incrementOpsAppliedStats = [] {};

@@ -82,10 +82,20 @@ __hs_insert_record(WT_SESSION_IMPL *session, WT_CURSOR *cursor, WT_BTREE *btree,
     uint64_t upd_type_full_diag;
     int cmp;
 #endif
+    bool hs_read_all_flag;
     uint64_t counter, hs_counter;
     uint32_t hs_btree_id;
 
     counter = 0;
+
+    /*
+     * Keep track if the caller had set WT_CURSTD_HS_READ_ALL flag on the history store cursor. We
+     * want to preserve the flags set by the caller when we exit from this function. Also, we want
+     * to explicitly set the flag WT_CURSTD_HS_READ_ALL only for the search_near operations on the
+     * history store cursor and perform all other cursor operations using the flags set by the
+     * caller of this function.
+     */
+    hs_read_all_flag = F_ISSET(cursor, WT_CURSTD_HS_READ_ALL);
 
     /* Allocate buffers for the history store and search key. */
     WT_ERR(__wt_scr_alloc(session, 0, &hs_key));
@@ -106,12 +116,22 @@ __hs_insert_record(WT_SESSION_IMPL *session, WT_CURSOR *cursor, WT_BTREE *btree,
     WT_ASSERT(session, type == WT_UPDATE_STANDARD || type == WT_UPDATE_MODIFY);
 
     /*
+     * Setting the flag WT_CURSTD_HS_READ_ALL before searching the history store optimizes the
+     * search routine as we do not skip globally visible tombstones during the search.
+     */
+    F_SET(cursor, WT_CURSTD_HS_READ_ALL);
+
+    /*
      * Adjust counter if there exists an update in the history store with same btree id, key and
      * timestamp. Otherwise the newly inserting history store record may fall behind the existing
      * one can lead to wrong order.
      */
     cursor->set_key(cursor, 4, btree->id, key, tw->start_ts, UINT64_MAX);
     WT_ERR_NOTFOUND_OK(__wt_curhs_search_near_before(session, cursor), true);
+
+    /* Only clear the flag if it wasn't set when we entered the function. */
+    if (!hs_read_all_flag)
+        F_CLR(cursor, WT_CURSTD_HS_READ_ALL);
 
     if (ret == 0) {
         WT_ERR(cursor->get_key(cursor, &hs_btree_id, hs_key, &hs_start_ts, &hs_counter));
@@ -122,13 +142,14 @@ __hs_insert_record(WT_SESSION_IMPL *session, WT_CURSOR *cursor, WT_BTREE *btree,
               &upd_type_full_diag, existing_val));
             WT_ERR(__wt_compare(session, NULL, existing_val, hs_value, &cmp));
             /*
-             * We shouldn't be inserting the same value again for the key unless coming from a
-             * different transaction. If the updates are from the same transaction, the start
-             * timestamp for each update should be different.
+             *  Same value should not be inserted again unless 1. previous entry is already
+             * deleted(i.e. the stop timestamp is globally visible), 2. from a different
+             * transaction 3. with a different timestamp if from the same transaction.
              */
             if (cmp == 0)
                 WT_ASSERT(session,
-                  tw->start_txn == WT_TXN_NONE ||
+                  __wt_txn_tw_stop_visible_all(session, &hs_cbt->upd_value->tw) ||
+                    tw->start_txn == WT_TXN_NONE ||
                     tw->start_txn != hs_cbt->upd_value->tw.start_txn ||
                     tw->start_ts != hs_cbt->upd_value->tw.start_ts);
             counter = hs_counter + 1;
@@ -152,8 +173,13 @@ __hs_insert_record(WT_SESSION_IMPL *session, WT_CURSOR *cursor, WT_BTREE *btree,
         if (ret == 0)
             WT_ERR_NOTFOUND_OK(cursor->next(cursor), true);
         else {
+            F_SET(cursor, WT_CURSTD_HS_READ_ALL);
+
             cursor->set_key(cursor, 3, btree->id, key, tw->start_ts + 1);
             WT_ERR_NOTFOUND_OK(__wt_curhs_search_near_after(session, cursor), true);
+
+            if (!hs_read_all_flag)
+                F_CLR(cursor, WT_CURSTD_HS_READ_ALL);
         }
         if (ret == 0)
             WT_ERR(__hs_fixup_out_of_order_from_pos(
@@ -183,6 +209,8 @@ __hs_insert_record(WT_SESSION_IMPL *session, WT_CURSOR *cursor, WT_BTREE *btree,
     WT_STAT_DATA_INCR(session, cache_hs_insert);
 
 err:
+    if (!hs_read_all_flag)
+        F_CLR(cursor, WT_CURSTD_HS_READ_ALL);
 #ifdef HAVE_DIAGNOSTIC
     __wt_scr_free(session, &existing_val);
 #endif
@@ -809,6 +837,8 @@ __hs_fixup_out_of_order_from_pos(WT_SESSION_IMPL *session, WT_CURSOR *hs_cursor,
          */
         hs_insert_tw.stop_ts = hs_insert_tw.durable_stop_ts = ts;
         hs_insert_tw.stop_txn = hs_cbt->upd_value->tw.stop_txn;
+
+        WT_ASSERT(session, hs_insert_tw.stop_txn >= hs_insert_tw.start_txn);
 
         /* Extract the underlying value for reinsertion. */
         WT_ERR(hs_cursor->get_value(

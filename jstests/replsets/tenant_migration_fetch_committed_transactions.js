@@ -4,7 +4,7 @@
  * committed transaction entries in its own 'config.transactions' collection.
  *
  * @tags: [requires_fcv_49, requires_majority_read_concern, incompatible_with_eft,
- * incompatible_with_windows_tls]
+ * incompatible_with_windows_tls, incompatible_with_macos, requires_persistence]
  */
 
 (function() {
@@ -95,7 +95,7 @@ const migrationOpts = {
     migrationIdString: extractUUIDFromObject(migrationId),
     tenantId,
 };
-assert.commandWorked(tenantMigrationTest.runMigration(migrationOpts));
+TenantMigrationTest.assertCommitted(tenantMigrationTest.runMigration(migrationOpts));
 
 // Verify that the recipient has fetched and written only the first committed transaction entry from
 // the donor.
