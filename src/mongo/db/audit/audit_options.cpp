@@ -120,12 +120,10 @@ namespace mongo {
 
     // Can't use MONGO_STARTUP_OPTIONS_VALIDATE here as we need serverGlobalParams
     // to be already initialized.
-    MONGO_INITIALIZER_GENERAL(AuditOptionsPath_Validate,
-                              ("EndStartupOptionHandling", "MungeUmask"),
-                              ("default"))
+    MONGO_INITIALIZER_GENERAL(AuditOptionsPath_Validate, ("EndStartupOptionHandling"), ("default"))
     (InitializerContext*) {
         if (!auditOptions.path.empty()) {
-            std::ofstream auditFile(auditOptions.path.c_str());
+            std::ofstream auditFile(auditOptions.path.c_str(), std::ios_base::app);
             if (!auditFile) {
                 return Status(ErrorCodes::BadValue,
                               "Could not open a file for writing at the given auditPath: " +
